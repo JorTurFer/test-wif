@@ -19,20 +19,45 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         
-      - name: Check
-        if: always()
+      - name: Check OIDC and Fetch Token
         run: |
-          OIDC_TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.accounts.stackit.cloud")
+          echo "--- Generando OIDC Token de GitHub ---"
+          # 1. Obtenemos el JWT de GitHub
+          OIDC_RESPONSE=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.accounts.stackit.cloud")
           
-          RESPONSE=$(curl -s -X POST "https://accounts.stackit.cloud/oauth/v2/token" \
+          # Extraemos solo el valor del token
+          OIDC_TOKEN=$(echo $OIDC_RESPONSE | jq -r '.value')
+
+          if [ "$OIDC_TOKEN" == "null" ] || [ -z "$OIDC_TOKEN" ]; then
+            echo "ERROR: No se pudo obtener el OIDC Token de GitHub. Revisa los 'permissions'."
+            echo "Respuesta completa: $OIDC_RESPONSE"
+            exit 1
+          fi
+
+          echo "OIDC Token generado correctamente (primeros caracteres: ${OIDC_TOKEN:0:10}...)"
+
+          echo "--- Intercambiando por Access Token de STACKIT ---"
+          # 2. Petición a STACKIT usando el OIDC_TOKEN como client_assertion
+          # Usamos -i para ver los headers de respuesta y -w para el código de estado HTTP
+          RESPONSE=$(curl -s -i -X POST "https://accounts.stackit.cloud/oauth/v2/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=client_credentials" \
             -d "client_id=check-gh-csb3msi8@sa.stackit.cloud" \
             -d "client_assertion_type=urn:schwarz:params:oauth:client-assertion-type:workload-jwt" \
-            -d "client_assertion=$RESPONSE")
-          
-          # Extraemos el access_token usando jq (instalado por defecto en runners de GitHub)
-          TOKEN=$(echo $RESPONSE | jq -r '.access_token')
-          
-          # Masking: Evita que el token se imprima accidentalmente en los logs de pasos futuros
-          echo "$TOKEN"
+            -d "client_assertion=$OIDC_TOKEN")
+
+          echo "--- Debugging Response ---"
+          echo "$RESPONSE"
+
+          # 3. Intentar extraer el access_token (buscando el cuerpo después de los headers)
+          BODY=$(echo "$RESPONSE" | awk '/^\r?$/ {RS="\\n"; getline; print $0; exit}')
+          TOKEN=$(echo "$BODY" | jq -r '.access_token // empty')
+
+          if [ -z "$TOKEN" ]; then
+            echo "FALLO: No se encontró access_token en la respuesta."
+            exit 1
+          else
+            echo "SUCCESS: Token obtenido!"
+            echo "ACCESS_TOKEN=$TOKEN"
+          fi
