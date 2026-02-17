@@ -22,4 +22,20 @@ jobs:
       - name: Check
         if: always()
         run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.accounts.stackit.cloud"
+          OIDC_TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.accounts.stackit.cloud")
+          
+          RESPONSE=$(curl -s -X POST "https://accounts.stackit.cloud/oauth/v2/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials" \
+            -d "client_id=check-gh-csb3msi8@sa.stackit.cloud" \
+            -d "client_assertion_type=urn:schwarz:params:oauth:client-assertion-type:workload-jwt"
+            -d "client_assertion=$RESPONSE")
+          
+          # Extraemos el access_token usando jq (instalado por defecto en runners de GitHub)
+          TOKEN=$(echo $RESPONSE | jq -r '.access_token')
+          
+          # Masking: Evita que el token se imprima accidentalmente en los logs de pasos futuros
+          echo "::add-mask::$TOKEN"
+          
+          # Guardamos el token en una variable de salida para usarlo después
+          echo "access_token=$TOKEN" >> $GITHUB_OUTPUT
