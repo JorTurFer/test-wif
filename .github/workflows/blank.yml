@@ -28,7 +28,7 @@ jobs:
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=client_credentials" \
             -d "client_id=check-gh-csb3msi8@sa.stackit.cloud" \
-            -d "client_assertion_type=urn:schwarz:params:oauth:client-assertion-type:workload-jwt"
+            -d "client_assertion_type=urn:schwarz:params:oauth:client-assertion-type:workload-jwt" \
             -d "client_assertion=$RESPONSE")
           
           # Extraemos el access_token usando jq (instalado por defecto en runners de GitHub)
