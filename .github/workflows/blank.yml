@@ -35,7 +35,4 @@ jobs:
           TOKEN=$(echo $RESPONSE | jq -r '.access_token')
           
           # Masking: Evita que el token se imprima accidentalmente en los logs de pasos futuros
-          echo "::add-mask::$TOKEN"
-          
-          # Guardamos el token en una variable de salida para usarlo después
-          echo "access_token=$TOKEN" >> $GITHUB_OUTPUT
+          echo "$TOKEN"
